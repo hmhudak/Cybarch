@@ -153,7 +153,7 @@ static async Task SeedDevDataAsync(WebApplication app)
         db.GameMembers.AddRange(
             new GameMember { GameId = game.Id, UserId = creator.Id, Role = GameMemberRole.DM, JoinedAtUtc = DateTime.UtcNow },
             new GameMember { GameId = game.Id, UserId = jano.Id, Role = GameMemberRole.Player, JoinedAtUtc = DateTime.UtcNow }
-        );
+        );        
 
         var ch = new Character
         {
