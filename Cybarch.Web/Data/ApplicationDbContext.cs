@@ -25,6 +25,7 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
     public DbSet<Character> Characters => Set<Character>();
     public DbSet<CharacterAssignment> CharacterAssignments => Set<CharacterAssignment>();
     public DbSet<CharacterItem> CharacterItems => Set<CharacterItem>();
+    public DbSet<CharacterCurrency> CharacterCurrencies => Set<CharacterCurrency>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -84,6 +85,17 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
 
         builder.Entity<CharacterItem>()
             .HasIndex(x => new { x.CharacterId, x.AddedAtUtc });
+
+        // CharacterCurrency: Character <->> DenominationKey (kompozitný kľúč)
+        builder.Entity<CharacterCurrency>()
+            .HasKey(x => new { x.CharacterId, x.DenominationKey });
+
+        builder.Entity<CharacterCurrency>()
+            .HasOne(x => x.Character)
+            .WithMany(c => c.Currency)
+            .HasForeignKey(x => x.CharacterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
 
     }
 }

@@ -42,4 +42,6 @@ public class Character
 
     public List<CharacterAssignment> Assignments { get; set; } = new();
     public List<CharacterItem> Items { get; set; } = new();
+    public List<CharacterCurrency> Currency { get; set; } = new();
+
 }

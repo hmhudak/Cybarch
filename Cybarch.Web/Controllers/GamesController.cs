@@ -144,7 +144,12 @@ public class GamesController : Controller
             MaxHp = vitals.MaxHp,
             CurrentHp = vitals.MaxHp,
             MaxMana = vitals.MaxMana,
-            CurrentMana = vitals.MaxMana
+            CurrentMana = vitals.MaxMana,
+
+            Currency = ruleset.Currency.Denominations
+                .Select(d => new CharacterCurrency { DenominationKey = d.Key, Amount = 0 })
+                .ToList(),
+
         };
 
         _db.Characters.Add(character);

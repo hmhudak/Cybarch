@@ -83,6 +83,9 @@ public class CharactersController : Controller
 
         var catalogDict = itemCatalog.ToDictionary(i => i.Id, i => i, StringComparer.OrdinalIgnoreCase);
 
+        var majorShort = ruleset.Currency.FindDenomination(ruleset.Currency.MajorDenominationKey)?.ShortName
+                         ?? ruleset.Currency.MajorDenominationKey;
+
         var inventoryItems = new List<InventoryItemVm>();
         foreach (var row in itemRows.OrderBy(r => r.ItemId))
         {
@@ -96,7 +99,7 @@ public class CharactersController : Controller
                     Description = "Predmet už nie je v katalógu rulesetu.",
                     Quantity = row.Quantity,
                     UnitWeight = 0m,
-                    Price = 0
+                    Price = "-"
                 });
                 continue;
             }
@@ -109,7 +112,7 @@ public class CharactersController : Controller
                 Description = def.Description,
                 Quantity = row.Quantity,
                 UnitWeight = def.Weight,
-                Price = def.Price,
+                Price = $"{ruleset.Currency.FormatMajor(def.Price)} {majorShort}",
                 StatsLine = (def.Type == ItemType.Weapon || def.Type == ItemType.Armor) ? StatsLineFor(def) : null
             });
         }
@@ -121,12 +124,37 @@ public class CharactersController : Controller
             Type = TypeLabel(def.Type),
             Description = def.Description,
             Weight = def.Weight,
-            Price = def.Price,
+            Price = $"{ruleset.Currency.FormatMajor(def.Price)} {majorShort}",
             StatsLine = (def.Type == ItemType.Weapon || def.Type == ItemType.Armor) ? StatsLineFor(def) : null
         }).ToList();
 
         var capacity = character.Str * 10;
-        var totalWeight = inventoryItems.Sum(x => x.TotalWeight);
+
+        var currencyRowsDb = await _db.CharacterCurrencies
+            .Where(x => x.CharacterId == id)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var denomDict = ruleset.Currency.Denominations
+            .ToDictionary(d => d.Key, StringComparer.OrdinalIgnoreCase);
+
+        var currencyRows = ruleset.Currency.Denominations.Select(d =>
+        {
+            var amt = currencyRowsDb.FirstOrDefault(x => string.Equals(x.DenominationKey, d.Key, StringComparison.OrdinalIgnoreCase))?.Amount ?? 0;
+            return new CharacterCurrencyVm
+            {
+                DenominationKey = d.Key,
+                Name = d.Name,
+                ShortName = d.ShortName,
+                Amount = amt,
+                CoinWeight = d.Weight
+            };
+        }).ToList();
+
+        var currencyWeight = currencyRows.Sum(r => r.TotalWeight);
+
+        var itemsWeight = inventoryItems.Sum(x => x.TotalWeight);
+        var totalWeight = itemsWeight + currencyWeight;
 
         var edit = new CharacterEditVm
         {
@@ -170,6 +198,12 @@ public class CharactersController : Controller
             CarryCapacity = capacity,
             TotalWeight = totalWeight,
             IsOverCapacity = totalWeight > capacity,
+
+            CurrencyRows = currencyRows,
+            CurrencyExchangeNote = ruleset.Currency.ExchangeNote,
+            CurrencyWeight = currencyWeight,
+            CanManageCurrency = isDm || assigned,
+
             CanManageInventory = isDm || assigned,
             InventoryItems = inventoryItems,
             AvailableItems = availableItems,
@@ -203,6 +237,9 @@ public class CharactersController : Controller
         character.CurrentMana = Math.Clamp(currentMana, 0, character.MaxMana);
 
         await _db.SaveChangesAsync();
+
+        if (WantsJson())
+            return Ok(new { currentHp = character.CurrentHp, currentMana = character.CurrentMana });
 
         return RedirectToAction(nameof(Details), new { id });
     }
@@ -299,6 +336,9 @@ public class CharactersController : Controller
         var ruleset = _rulesets.GetByKey(character.Game.RulesetKey);
         if (!ruleset.IsValidItem(itemId))
         {
+            if (WantsJson())
+                return BadRequest(new { error = "Neplatný predmet (nie je v katalógu rulesetu)." });
+
             TempData["Error"] = "Neplatný predmet (nie je v katalógu rulesetu).";
             return RedirectToAction(nameof(Details), new { id });
         }
@@ -306,13 +346,14 @@ public class CharactersController : Controller
         var row = await _db.CharacterItems.FirstOrDefaultAsync(x => x.CharacterId == id && x.ItemId == itemId);
         if (row is null)
         {
-            _db.CharacterItems.Add(new CharacterItem
+            row = new CharacterItem
             {
                 CharacterId = id,
                 ItemId = itemId,
                 Quantity = 1,
                 AddedAtUtc = DateTime.UtcNow
-            });
+            };
+            _db.CharacterItems.Add(row);
         }
         else
         {
@@ -320,6 +361,25 @@ public class CharactersController : Controller
         }
 
         await _db.SaveChangesAsync();
+
+        if (WantsJson())
+        {
+            var capacity = character.Str * 10;
+            var currencyWeight = await ComputeCurrencyWeightAsync(id, ruleset);
+            var itemsWeight = await ComputeItemsWeightAsync(id, ruleset);
+            var totalWeight = itemsWeight + currencyWeight;
+
+            return Ok(new
+            {
+                itemId,
+                newQuantity = row.Quantity,
+                currencyWeight,
+                itemsWeight,
+                totalWeight,
+                isOverCapacity = totalWeight > capacity
+            });
+        }
+
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -339,14 +399,209 @@ public class CharactersController : Controller
         var assigned = await _db.CharacterAssignments.AnyAsync(a => a.CharacterId == id && a.UserId == userId);
         if (!isDm && !assigned) return Forbid();
 
+        var ruleset = _rulesets.GetByKey(character.Game.RulesetKey);
+
         var row = await _db.CharacterItems.FirstOrDefaultAsync(x => x.CharacterId == id && x.ItemId == itemId);
-        if (row is null) return RedirectToAction(nameof(Details), new { id });
+        if (row is null)
+        {
+            if (WantsJson())
+                return BadRequest(new { error = "Predmet sa v inventári nenašiel." });
+
+            return RedirectToAction(nameof(Details), new { id });
+        }
 
         row.Quantity -= 1;
         if (row.Quantity <= 0)
             _db.CharacterItems.Remove(row);
 
         await _db.SaveChangesAsync();
+
+        if (WantsJson())
+        {
+            var capacity = character.Str * 10;
+            var currencyWeight = await ComputeCurrencyWeightAsync(id, ruleset);
+            var itemsWeight = await ComputeItemsWeightAsync(id, ruleset);
+            var totalWeight = itemsWeight + currencyWeight;
+
+            return Ok(new
+            {
+                itemId,
+                newQuantity = Math.Max(0, row.Quantity),
+                currencyWeight,
+                itemsWeight,
+                totalWeight,
+                isOverCapacity = totalWeight > capacity
+            });
+        }
+
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddCoins(int id, string denomKey, int amount)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+        var character = await _db.Characters
+            .Include(c => c.Game)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (character is null) return NotFound();
+
+        var isDm = await _gameAccess.IsDmAsync(character.GameId, userId);
+        var assigned = await _db.CharacterAssignments.AnyAsync(a => a.CharacterId == id && a.UserId == userId);
+        if (!isDm && !assigned) return Forbid();
+
+        amount = Math.Max(1, amount);
+
+        var ruleset = _rulesets.GetByKey(character.Game.RulesetKey);
+        var denom = ruleset.Currency.FindDenomination(denomKey);
+        if (denom is null)
+        {
+            if (WantsJson())
+                return BadRequest(new { error = "Neplatný typ meny." });
+
+            TempData["Error"] = "Neplatný typ meny.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var row = await _db.CharacterCurrencies.FirstOrDefaultAsync(x => x.CharacterId == id && x.DenominationKey == denomKey);
+        if (row is null)
+        {
+            row = new CharacterCurrency { CharacterId = id, DenominationKey = denomKey, Amount = 0 };
+            _db.CharacterCurrencies.Add(row);
+        }
+
+        row.Amount += amount;
+        await _db.SaveChangesAsync();
+
+        if (WantsJson())
+        {
+            var capacity = character.Str * 10;
+            var currencyWeight = await ComputeCurrencyWeightAsync(id, ruleset);
+            var itemsWeight = await ComputeItemsWeightAsync(id, ruleset);
+            var totalWeight = itemsWeight + currencyWeight;
+
+            return Ok(new
+            {
+                denomKey,
+                newAmount = row.Amount,
+                denomTotalWeight = denom.Weight * row.Amount,
+                currencyWeight,
+                totalWeight,
+                isOverCapacity = totalWeight > capacity
+            });
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveCoins(int id, string denomKey, int amount)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+        var character = await _db.Characters
+            .Include(c => c.Game)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (character is null) return NotFound();
+
+        var isDm = await _gameAccess.IsDmAsync(character.GameId, userId);
+        var assigned = await _db.CharacterAssignments.AnyAsync(a => a.CharacterId == id && a.UserId == userId);
+        if (!isDm && !assigned) return Forbid();
+
+        amount = Math.Max(1, amount);
+
+        var ruleset = _rulesets.GetByKey(character.Game.RulesetKey);
+        var denom = ruleset.Currency.FindDenomination(denomKey);
+        if (denom is null)
+        {
+            if (WantsJson())
+                return BadRequest(new { error = "Neplatný typ meny." });
+
+            TempData["Error"] = "Neplatný typ meny.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var row = await _db.CharacterCurrencies.FirstOrDefaultAsync(x => x.CharacterId == id && x.DenominationKey == denomKey);
+        var current = row?.Amount ?? 0;
+
+        if (current < amount)
+        {
+            var msg = $"Nedá sa odobrať {amount} {denom.ShortName} – máš iba {current}.";
+
+            if (WantsJson())
+                return BadRequest(new { error = msg });
+
+            TempData["Error"] = msg;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        row!.Amount -= amount;
+        await _db.SaveChangesAsync();
+
+        if (WantsJson())
+        {
+            var capacity = character.Str * 10;
+            var currencyWeight = await ComputeCurrencyWeightAsync(id, ruleset);
+            var itemsWeight = await ComputeItemsWeightAsync(id, ruleset);
+            var totalWeight = itemsWeight + currencyWeight;
+
+            return Ok(new
+            {
+                denomKey,
+                newAmount = row.Amount,
+                denomTotalWeight = denom.Weight * row.Amount,
+                currencyWeight,
+                totalWeight,
+                isOverCapacity = totalWeight > capacity
+            });
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private bool WantsJson()
+    {
+        var accept = Request.Headers["Accept"].ToString();
+        return Request.Headers["X-Requested-With"] == "XMLHttpRequest"
+               || accept.Contains("application/json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<decimal> ComputeCurrencyWeightAsync(int characterId, IRulesetDefinition ruleset)
+    {
+        var rows = await _db.CharacterCurrencies
+            .Where(x => x.CharacterId == characterId)
+            .AsNoTracking()
+            .ToListAsync();
+
+        decimal sum = 0m;
+        foreach (var r in rows)
+        {
+            var denom = ruleset.Currency.FindDenomination(r.DenominationKey);
+            if (denom is null) continue;
+            sum += denom.Weight * r.Amount;
+        }
+        return sum;
+    }
+
+    private async Task<decimal> ComputeItemsWeightAsync(int characterId, IRulesetDefinition ruleset)
+    {
+        var rows = await _db.CharacterItems
+            .Where(x => x.CharacterId == characterId)
+            .AsNoTracking()
+            .ToListAsync();
+
+        decimal sum = 0m;
+        foreach (var r in rows)
+        {
+            var def = ruleset.FindItem(r.ItemId);
+            if (def is null) continue;
+            sum += def.Weight * r.Quantity;
+        }
+        return sum;
     }
 }

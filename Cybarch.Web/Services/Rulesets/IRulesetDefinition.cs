@@ -3,7 +3,6 @@ namespace Cybarch.Web.Services.Rulesets;
 /// <summary>
 /// "Kontajner" pre pravidlá hry.
 ///
-/// Prečo je to dobré:
 /// - Controller nerieši DrD/DnD špecifiká.
 /// - Neskôr vieme pridať nový ruleset (napr. DnD 5E) bez prepisovania UI logiky.
 /// </summary>
@@ -19,6 +18,7 @@ public interface IRulesetDefinition
     bool IsValidRace(string? raceKey);
     bool IsValidClass(string? classKey);
     bool IsValidSubclass(string? classKey, string? subclassKey);
+    CurrencyDefinition Currency { get; }
 
     DefaultVitals GetDefaultVitals(string classKey, int level);
 
@@ -26,4 +26,5 @@ public interface IRulesetDefinition
 
     bool IsValidItem(string? itemId);
     RulesetItem? FindItem(string itemId);
+
 }

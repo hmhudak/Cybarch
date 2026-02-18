@@ -1,7 +1,96 @@
 @model CharacterDetailsVm
 @{
     ViewData["Title"] = "Character";
+    var charId = Model.Character.Id;
+    var firstDenom = Model.CurrencyRows?.FirstOrDefault()?.DenominationKey ?? "zl";
 }
+
+<style>
+    /* Compact currency UI */
+    .coin-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .35rem .55rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.2);
+        background: rgba(255,255,255,.04);
+        color: inherit;
+        cursor: pointer;
+        user-select: none;
+        transition: transform .08s ease, border-color .08s ease;
+    }
+
+    .coin-pill.selected {
+        transform: scale(1.06);
+        border: 2px solid #28a745; /* zelený border */
+        background: rgba(40,167,69,.08);
+    }
+
+    .coin-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1px solid rgba(0,0,0,.25);
+        flex: 0 0 auto;
+    }
+
+    /* farby mincí */
+    .coin-zl { background: #f2d06b; }  /* zlatá/žltá */
+    .coin-st { background: #cfd3d6; }  /* bledosivá */
+    .coin-md { background: #e0a36a; }  /* bledooranžová */
+
+    .coin-meta {
+        display: inline-flex;
+        gap: .5rem;
+        align-items: baseline;
+        white-space: nowrap;
+    }
+
+    .coin-amt {
+        font-weight: 600;
+        min-width: 1.5rem;
+        text-align: right;
+    }
+
+    .coin-w {
+        font-size: .85em;
+        opacity: .75;
+        min-width: 2.5rem;
+        text-align: right;
+    }
+
+    .currency-box {
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: .75rem;
+        padding: .75rem;
+        background: rgba(255,255,255,.02);
+    }
+
+    .currency-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        flex-wrap: wrap;
+    }
+
+    .currency-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        flex-wrap: wrap;
+        margin-top: .5rem;
+    }
+
+    .currency-coins {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+</style>
 
 <div class="d-flex justify-content-between align-items-center">
     <div>
@@ -26,6 +115,13 @@
     <div class="alert alert-danger mt-3">@Model.ErrorMessage</div>
 }
 
+<div id="ajaxError" class="alert alert-danger mt-3 d-none"></div>
+
+<!-- Jeden anti-forgery token pre fetch -->
+<form id="af" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
 <div class="row mt-4">
     <div class="col-lg-6">
         <h4>Basics</h4>
@@ -47,7 +143,7 @@
         </dl>
 
         <h4>Vitals</h4>
-        <form method="post" asp-action="UpdateVitals" class="mt-2">
+        <form id="vitalsForm" method="post" asp-action="UpdateVitals" class="mt-2">
             <input type="hidden" name="id" value="@Model.Character.Id" />
             <div class="row g-2">
                 <div class="col-md-6">
@@ -88,6 +184,64 @@
 
         <hr />
 
+        <!-- MENA (kompaktné) -->
+        <h5 class="mb-2">Mena</h5>
+
+        <div class="currency-box">
+            <div class="currency-topline">
+                <div class="small text-muted d-flex align-items-center flex-wrap" style="gap:.35rem;">
+                    <span>Kurz:</span>
+                    <span class="coin-dot coin-st"></span><span>10</span><span>=</span><span class="coin-dot coin-zl"></span><span>1</span><span>,</span>
+                    <span class="coin-dot coin-md"></span><span>10</span><span>=</span><span class="coin-dot coin-st"></span><span>1</span>
+                </div>
+
+                <div class="small text-muted">
+                    Váha mincí: <strong id="currencyWeight">@Model.CurrencyWeight.ToString("0.##")</strong>
+                </div>
+            </div>
+
+            <div class="currency-controls">
+                <div id="coinSelector" class="currency-coins">
+                    @foreach (var c in Model.CurrencyRows)
+                    {
+                        var isSelected = string.Equals(c.DenominationKey, firstDenom, StringComparison.OrdinalIgnoreCase);
+
+                        // Farby podľa DrD kľúčov. Pre iné rulesety fallback = strieborná.
+                        var colorClass = c.DenominationKey.ToLowerInvariant() switch
+                        {
+                            "zl" => "coin-zl",
+                            "st" => "coin-st",
+                            "md" => "coin-md",
+                            _ => "coin-st"
+                        };
+
+                        <button type="button"
+                                class="coin-pill @(isSelected ? "selected" : "")"
+                                data-denom="@c.DenominationKey"
+                                title="@c.Name (@c.ShortName)">
+                            <span class="coin-dot @colorClass"></span>
+                            <span class="coin-meta">
+                                <span class="coin-amt" id="coinAmt-@c.DenominationKey">@c.Amount</span>
+                                <span class="coin-w" id="coinW-@c.DenominationKey">@c.TotalWeight.ToString("0.##")</span>
+                            </span>
+                        </button>
+                    }
+                </div>
+
+                @if (Model.CanManageCurrency)
+                {
+                    <div class="input-group input-group-sm" style="width: 190px;">
+                        <button id="coinMinus" class="btn btn-outline-danger" type="button">−</button>
+                        <input id="coinAmount" class="form-control text-end" type="number" min="1" value="1" />
+                        <button id="coinPlus" class="btn btn-outline-primary" type="button">+</button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <hr class="my-3" />
+
+        <!-- INVENTORY -->
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Inventory</h5>
             @if (Model.CanManageInventory)
@@ -98,66 +252,65 @@
 
         <div class="text-muted mt-1">
             Nosnosť:
-            <strong class="@(Model.IsOverCapacity ? "text-danger" : "")">@Model.CarryCapacity</strong>
+            <strong id="carryCapacityValue" class="@(Model.IsOverCapacity ? "text-danger" : "")">@Model.CarryCapacity</strong>
             &nbsp;|&nbsp;
-            Váha: <strong>@Model.TotalWeight.ToString("0.##")</strong>
+            Váha: <strong id="totalWeightValue">@Model.TotalWeight.ToString("0.##")</strong>
         </div>
 
-        @if (Model.InventoryItems.Count == 0)
-        {
-            <div class="alert alert-light border mt-2 mb-0">Inventory je prázdny.</div>
-        }
-        else
-        {
-            <div class="table-responsive mt-2">
-                <table class="table table-sm align-middle">
-                    <thead>
-                        <tr>
-                            <th>Predmet</th>
-                            <th>Typ</th>
-                            <th class="text-end">Ks</th>
-                            <th class="text-end">Váha</th>
-                            <th class="text-end">Spolu</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var it in Model.InventoryItems)
-                        {
-                            <tr>
-                                <td>
-                                    <div><strong>@it.Name</strong></div>
-                                    @if (!string.IsNullOrWhiteSpace(it.StatsLine))
-                                    {
-                                        <div class="small text-muted">@it.StatsLine</div>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(it.Description))
-                                    {
-                                        <div class="small text-muted">@it.Description</div>
-                                    }
-                                </td>
-                                <td class="text-muted">@it.Type</td>
-                                <td class="text-end">@it.Quantity</td>
-                                <td class="text-end">@it.UnitWeight.ToString("0.##")</td>
-                                <td class="text-end"><strong>@it.TotalWeight.ToString("0.##")</strong></td>
-                                <td class="text-end" style="width:1%; white-space:nowrap;">
-                                    @if (Model.CanManageInventory)
-                                    {
-                                        <form method="post" asp-action="RemoveItem" class="d-inline">
-                                            <input type="hidden" name="id" value="@Model.Character.Id" />
-                                            <input type="hidden" name="itemId" value="@it.ItemId" />
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Odobrať 1">−</button>
-                                        </form>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+        <div id="inventoryEmptyAlert" class="alert alert-light border mt-2 mb-0 @(Model.InventoryItems.Count == 0 ? "" : "d-none")">
+    Inventory je prázdny.
+</div>
 
-        <h5>Notes</h5>
+        <div id="inventoryTableWrap" class="table-responsive mt-2 @(Model.InventoryItems.Count == 0 ? "d-none" : "")">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Predmet</th>
+                        <th>Typ</th>
+                        <th class="text-end">Ks</th>
+                        <th class="text-end">Váha</th>
+                        <th class="text-end">Spolu</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTbody">
+                    @foreach (var it in Model.InventoryItems)
+                    {
+                        <tr id="invRow-@it.ItemId"
+                            data-item-id="@it.ItemId"
+                            data-unit-weight="@it.UnitWeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)">
+                            <td>
+                                <div><strong>@it.Name</strong></div>
+                                @if (!string.IsNullOrWhiteSpace(it.StatsLine))
+                                {
+                                    <div class="small text-muted">@it.StatsLine</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(it.Description))
+                                {
+                                    <div class="small text-muted">@it.Description</div>
+                                }
+                            </td>
+                            <td class="text-muted">@it.Type</td>
+                            <td class="text-end"><span id="invQty-@it.ItemId">@it.Quantity</span></td>
+                            <td class="text-end">@it.UnitWeight.ToString("0.##")</td>
+                            <td class="text-end"><strong id="invTotal-@it.ItemId">@it.TotalWeight.ToString("0.##")</strong></td>
+                            <td class="text-end" style="width:1%; white-space:nowrap;">
+                                @if (Model.CanManageInventory)
+                                {
+                                    <form method="post" asp-action="RemoveItem" class="d-inline js-remove-item" data-item-id="@it.ItemId">
+                                        <input type="hidden" name="id" value="@Model.Character.Id" />
+                                        <input type="hidden" name="itemId" value="@it.ItemId" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Odobrať 1">−</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <h5 class="mt-3">Notes</h5>
         <pre class="p-3 bg-light border rounded" style="white-space: pre-wrap;">@Model.Character.Notes</pre>
     </div>
 </div>
@@ -265,7 +418,15 @@
                     <div class="list-group">
                         @foreach (var it in Model.AvailableItems)
                         {
-                            <form method="post" asp-action="AddItem" class="list-group-item list-group-item-action">
+                            <form method="post"
+                                  asp-action="AddItem"
+                                  class="list-group-item list-group-item-action js-add-item"
+                                  data-item-id="@it.ItemId"
+                                  data-item-name="@it.Name"
+                                  data-item-type="@it.Type"
+                                  data-item-desc="@it.Description"
+                                  data-item-stats="@it.StatsLine"
+                                  data-item-unit-weight="@it.Weight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)">
                                 <input type="hidden" name="id" value="@Model.Character.Id" />
                                 <input type="hidden" name="itemId" value="@it.ItemId" />
 
@@ -302,4 +463,378 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (function () {
+            const charId = @charId;
+            const ajaxError = document.getElementById('ajaxError');
+
+            function showError(msg) {
+                ajaxError.textContent = msg || 'Chyba.';
+                ajaxError.classList.remove('d-none');
+            }
+            function clearError() {
+                ajaxError.classList.add('d-none');
+                ajaxError.textContent = '';
+            }
+
+            const afToken = document.querySelector('#af input[name="__RequestVerificationToken"]')?.value;
+
+            // ---- Coin selection UI ----
+            let selectedDenom = '@firstDenom';
+
+            const selector = document.getElementById('coinSelector');
+            if (selector) {
+                selector.querySelectorAll('[data-denom]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        selector.querySelectorAll('.coin-pill').forEach(x => x.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        selectedDenom = btn.getAttribute('data-denom');
+                    });
+                });
+            }
+
+            function fmt(n) {
+                try {
+                    return Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                } catch {
+                    return n;
+                }
+            }
+
+            async function postForm(url, dataObj) {
+                clearError();
+
+                const body = new URLSearchParams(dataObj);
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'RequestVerificationToken': afToken
+                    },
+                    body
+                });
+
+                let payload = null;
+                const ct = res.headers.get('content-type') || '';
+                if (ct.includes('application/json')) payload = await res.json();
+
+                if (!res.ok) {
+                    // ak server vráti JSON s error, zobrazíme ho
+                    const msg = payload?.error || payload?.message || 'Chyba pri komunikácii so serverom.';
+                    throw new Error(msg);
+                }
+
+                return payload;
+            }
+
+            // ---- Currency +/- (no reload) ----
+            const plusBtn = document.getElementById('coinPlus');
+            const minusBtn = document.getElementById('coinMinus');
+            const amountInput = document.getElementById('coinAmount');
+
+            async function adjustCoins(isAdd) {
+                const amount = Math.max(1, parseInt(amountInput?.value || '1', 10));
+
+                const url = isAdd
+                    ? '@Url.Action("AddCoins", "Characters")'
+                    : '@Url.Action("RemoveCoins", "Characters")';
+
+                const data = await postForm(url, { id: charId, denomKey: selectedDenom, amount: amount });
+
+                // očakávaný payload:
+                // { denomKey, newAmount, denomTotalWeight, currencyWeight, totalWeight, isOverCapacity }
+                document.getElementById(`coinAmt-${data.denomKey}`).textContent = data.newAmount;
+                document.getElementById(`coinW-${data.denomKey}`).textContent = fmt(data.denomTotalWeight);
+
+                document.getElementById('currencyWeight').textContent = fmt(data.currencyWeight);
+                document.getElementById('totalWeightValue').textContent = fmt(data.totalWeight);
+
+                const capEl = document.getElementById('carryCapacityValue');
+                if (capEl) {
+                    capEl.classList.toggle('text-danger', !!data.isOverCapacity);
+                }
+
+                if (amountInput) amountInput.value = '1';
+            }
+
+            if (plusBtn) plusBtn.addEventListener('click', async () => {
+                try { await adjustCoins(true); } catch (e) { showError(e.message); }
+            });
+            if (minusBtn) minusBtn.addEventListener('click', async () => {
+                try { await adjustCoins(false); } catch (e) { showError(e.message); }
+            });
+
+            // ---- Optional: Vitals save without reload (needs JSON response) ----
+            const vitalsForm = document.getElementById('vitalsForm');
+            if (vitalsForm) {
+                vitalsForm.addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    try {
+                        const formData = new FormData(vitalsForm);
+                        const url = vitalsForm.getAttribute('action');
+
+                        // fetch as urlencoded (simple)
+                        const obj = {};
+                        formData.forEach((v, k) => obj[k] = v);
+
+                        const data = await postForm(url, obj);
+
+                        // očakávaný payload: { currentHp, currentMana }
+                        const hpInput = vitalsForm.querySelector('input[name="currentHp"]');
+                        const manaInput = vitalsForm.querySelector('input[name="currentMana"]');
+                        if (hpInput) hpInput.value = data.currentHp;
+                        if (manaInput) manaInput.value = data.currentMana;
+                    } catch (e) {
+                        showError(e.message);
+                    }
+                });
+            }
+
+            // ---- Inventory add/remove (no reload) ----
+
+            function parseDec(x) {
+                if (x === null || x === undefined) return 0;
+                const s = String(x).trim().replace(',', '.');
+                const n = Number(s);
+                return Number.isFinite(n) ? n : 0;
+            }
+
+            function setWeightsFromServer(data) {
+                // total weight + overcapacity
+                const totalEl = document.getElementById('totalWeightValue');
+                if (totalEl) totalEl.textContent = fmt(data.totalWeight);
+
+                const capEl = document.getElementById('carryCapacityValue');
+                if (capEl) capEl.classList.toggle('text-danger', !!data.isOverCapacity);
+            }
+
+            function ensureInventoryVisible() {
+                const empty = document.getElementById('inventoryEmptyAlert');
+                const wrap = document.getElementById('inventoryTableWrap');
+                if (empty) empty.classList.add('d-none');
+                if (wrap) wrap.classList.remove('d-none');
+            }
+
+            function ensureInventoryEmptyIfNeeded() {
+                const tbody = document.getElementById('inventoryTbody');
+                const empty = document.getElementById('inventoryEmptyAlert');
+                const wrap = document.getElementById('inventoryTableWrap');
+
+                const hasRows = tbody && tbody.querySelector('tr');
+                if (!hasRows) {
+                    if (empty) empty.classList.remove('d-none');
+                    if (wrap) wrap.classList.add('d-none');
+                }
+            }
+
+            function createInventoryRow(meta, qty) {
+                const tbody = document.getElementById('inventoryTbody');
+                if (!tbody) return;
+
+                const itemId = meta.itemId;
+                const unitWeight = parseDec(meta.unitWeight);
+
+                const tr = document.createElement('tr');
+                tr.id = `invRow-${itemId}`;
+                tr.dataset.itemId = itemId;
+                tr.dataset.unitWeight = String(meta.unitWeight);
+
+                // td 1: item info
+                const tdName = document.createElement('td');
+
+                const nameDiv = document.createElement('div');
+                const strong = document.createElement('strong');
+                strong.textContent = meta.name || itemId;
+                nameDiv.appendChild(strong);
+                tdName.appendChild(nameDiv);
+
+                if (meta.stats && meta.stats.trim().length > 0) {
+                    const st = document.createElement('div');
+                    st.className = 'small text-muted';
+                    st.textContent = meta.stats;
+                    tdName.appendChild(st);
+                }
+
+                if (meta.desc && meta.desc.trim().length > 0) {
+                    const ds = document.createElement('div');
+                    ds.className = 'small text-muted';
+                    ds.textContent = meta.desc;
+                    tdName.appendChild(ds);
+                }
+
+                // td 2: type
+                const tdType = document.createElement('td');
+                tdType.className = 'text-muted';
+                tdType.textContent = meta.type || '';
+
+                // td 3: qty
+                const tdQty = document.createElement('td');
+                tdQty.className = 'text-end';
+                const qtySpan = document.createElement('span');
+                qtySpan.id = `invQty-${itemId}`;
+                qtySpan.textContent = String(qty);
+                tdQty.appendChild(qtySpan);
+
+                // td 4: unit weight
+                const tdUnit = document.createElement('td');
+                tdUnit.className = 'text-end';
+                tdUnit.textContent = fmt(unitWeight);
+
+                // td 5: total
+                const tdTotal = document.createElement('td');
+                tdTotal.className = 'text-end';
+                const totalStrong = document.createElement('strong');
+                totalStrong.id = `invTotal-${itemId}`;
+                totalStrong.textContent = fmt(unitWeight * qty);
+                tdTotal.appendChild(totalStrong);
+
+                // td 6: remove btn form
+                const tdBtn = document.createElement('td');
+                tdBtn.className = 'text-end';
+                tdBtn.style.width = '1%';
+                tdBtn.style.whiteSpace = 'nowrap';
+
+                const form = document.createElement('form');
+                form.method = 'post';
+                form.action = '@Url.Action("RemoveItem", "Characters")';
+                form.className = 'd-inline js-remove-item';
+                form.dataset.itemId = itemId;
+
+                // anti-forgery hidden (pre prípad, že by sa niekde submitlo bez fetch)
+                if (afToken) {
+                    const t = document.createElement('input');
+                    t.type = 'hidden';
+                    t.name = '__RequestVerificationToken';
+                    t.value = afToken;
+                    form.appendChild(t);
+                }
+
+                const hidId = document.createElement('input');
+                hidId.type = 'hidden';
+                hidId.name = 'id';
+                hidId.value = String(charId);
+
+                const hidItem = document.createElement('input');
+                hidItem.type = 'hidden';
+                hidItem.name = 'itemId';
+                hidItem.value = itemId;
+
+                const btn = document.createElement('button');
+                btn.type = 'submit';
+                btn.className = 'btn btn-sm btn-outline-danger';
+                btn.title = 'Odobrať 1';
+                btn.textContent = '−';
+
+                form.appendChild(hidId);
+                form.appendChild(hidItem);
+                form.appendChild(btn);
+
+                tdBtn.appendChild(form);
+
+                tr.appendChild(tdName);
+                tr.appendChild(tdType);
+                tr.appendChild(tdQty);
+                tr.appendChild(tdUnit);
+                tr.appendChild(tdTotal);
+                tr.appendChild(tdBtn);
+
+                tbody.appendChild(tr);
+
+                // hneď naviažeme handler
+                wireRemoveForm(form);
+            }
+
+            async function handleAddItem(form) {
+                const itemId = form.querySelector('input[name="itemId"]')?.value || form.dataset.itemId;
+                if (!itemId) return;
+
+                const data = await postForm(form.action, { id: charId, itemId: itemId });
+
+                ensureInventoryVisible();
+
+                const row = document.getElementById(`invRow-${data.itemId}`);
+                const newQty = Number(data.newQuantity) || 0;
+
+                if (row) {
+                    const qtyEl = document.getElementById(`invQty-${data.itemId}`);
+                    if (qtyEl) qtyEl.textContent = String(newQty);
+
+                    const unitW = parseDec(row.dataset.unitWeight);
+                    const totalEl = document.getElementById(`invTotal-${data.itemId}`);
+                    if (totalEl) totalEl.textContent = fmt(unitW * newQty);
+                } else {
+                    // create new row from modal meta
+                    createInventoryRow({
+                        itemId: itemId,
+                        name: form.dataset.itemName || itemId,
+                        type: form.dataset.itemType || '',
+                        desc: form.dataset.itemDesc || '',
+                        stats: form.dataset.itemStats || '',
+                        unitWeight: form.dataset.itemUnitWeight || '0'
+                    }, newQty > 0 ? newQty : 1);
+                }
+
+                setWeightsFromServer(data);
+
+                // zavrieť modal (voliteľné, ale príjemné)
+                try {
+                    const m = document.getElementById('addItemModal');
+                    const inst = bootstrap?.Modal?.getInstance(m) || (m ? new bootstrap.Modal(m) : null);
+                    inst?.hide();
+                } catch { }
+            }
+
+            async function handleRemoveItem(form) {
+                const itemId = form.querySelector('input[name="itemId"]')?.value || form.dataset.itemId;
+                if (!itemId) return;
+
+                const data = await postForm(form.action, { id: charId, itemId: itemId });
+
+                const newQty = Number(data.newQuantity) || 0;
+
+                if (newQty <= 0) {
+                    const row = document.getElementById(`invRow-${data.itemId}`);
+                    row?.remove();
+                    ensureInventoryEmptyIfNeeded();
+                } else {
+                    const row = document.getElementById(`invRow-${data.itemId}`);
+                    if (row) {
+                        const qtyEl = document.getElementById(`invQty-${data.itemId}`);
+                        if (qtyEl) qtyEl.textContent = String(newQty);
+
+                        const unitW = parseDec(row.dataset.unitWeight);
+                        const totalEl = document.getElementById(`invTotal-${data.itemId}`);
+                        if (totalEl) totalEl.textContent = fmt(unitW * newQty);
+                    }
+                }
+
+                setWeightsFromServer(data);
+            }
+
+            function wireAddForm(form) {
+                form.addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    try { await handleAddItem(form); }
+                    catch (e) { showError(e.message); }
+                });
+            }
+
+            function wireRemoveForm(form) {
+                form.addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    try { await handleRemoveItem(form); }
+                    catch (e) { showError(e.message); }
+                });
+            }
+
+            // initial wiring
+            document.querySelectorAll('form.js-add-item').forEach(wireAddForm);
+            document.querySelectorAll('form.js-remove-item').forEach(wireRemoveForm);
+
+
+        })();
+    </script>
 }

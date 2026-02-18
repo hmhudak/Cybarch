@@ -1,5 +1,6 @@
-using System.ComponentModel.DataAnnotations;
+using Cybarch.Web.Models;
 using Cybarch.Web.Services.Rulesets;
+using System.ComponentModel.DataAnnotations;
 
 namespace Cybarch.Web.ViewModels;
 
@@ -89,6 +90,12 @@ public class CharacterDetailsVm
     public List<InventoryItemVm> InventoryItems { get; set; } = new();
     public List<ItemPickerItemVm> AvailableItems { get; set; } = new();
 
+    // Currency
+    public List<CharacterCurrencyVm> CurrencyRows { get; set; } = new();
+    public string CurrencyExchangeNote { get; set; } = string.Empty;
+    public decimal CurrencyWeight { get; set; }
+    public bool CanManageCurrency { get; set; }
+
     public string? ErrorMessage { get; set; }
 }
 
@@ -102,7 +109,7 @@ public class InventoryItemVm
     public int Quantity { get; set; }
     public decimal UnitWeight { get; set; }
     public decimal TotalWeight => UnitWeight * Quantity;
-    public int Price { get; set; }
+    public string Price { get; set; } = string.Empty; // napr. "12.03 zl"
 
     public string? StatsLine { get; set; }
 }
@@ -114,7 +121,17 @@ public class ItemPickerItemVm
     public string Type { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Weight { get; set; }
-    public int Price { get; set; }
+    public string Price { get; set; } = "";
     public string? StatsLine { get; set; }
 }
 
+public class CharacterCurrencyVm
+{
+    public string DenominationKey { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ShortName { get; set; } = string.Empty;
+
+    public int Amount { get; set; }
+    public decimal CoinWeight { get; set; }
+    public decimal TotalWeight => CoinWeight * Amount;
+}

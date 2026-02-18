@@ -11,6 +11,7 @@ public class Drd16Ruleset : IRulesetDefinition
     public IReadOnlyList<CatalogItem> Classes { get; } = Drd16CatalogClasses.All;
     public IReadOnlyList<SubclassItem> Subclasses { get; } = Drd16CatalogSubclasses.All;
     public IReadOnlyList<RulesetItem> Items { get; } = Drd16CatalogItems.All;
+    public CurrencyDefinition Currency { get; } = Drd16Currency.Definition;
 
     public bool IsValidRace(string? raceKey)
         => !string.IsNullOrWhiteSpace(raceKey) && Races.Any(r => r.Key == raceKey);
