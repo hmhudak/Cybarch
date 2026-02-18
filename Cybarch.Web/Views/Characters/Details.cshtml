@@ -1,0 +1,305 @@
+@model CharacterDetailsVm
+@{
+    ViewData["Title"] = "Character";
+}
+
+<div class="d-flex justify-content-between align-items-center">
+    <div>
+        <h2>@Model.Character.Name</h2>
+        <div class="text-muted">
+            Game: <a asp-controller="Games" asp-action="Details" asp-route-id="@Model.GameId">@Model.GameName</a>
+            &nbsp;|&nbsp;
+            Ruleset: <strong>@Model.RulesetDisplayName</strong>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-controller="Games" asp-action="Details" asp-route-id="@Model.GameId">Back</a>
+        @if (Model.IsDm)
+        {
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editModal">Edit</button>
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-danger mt-3">@Model.ErrorMessage</div>
+}
+
+<div class="row mt-4">
+    <div class="col-lg-6">
+        <h4>Basics</h4>
+        <dl class="row">
+            <dt class="col-4">Race</dt>
+            <dd class="col-8">@Model.Character.Race</dd>
+
+            <dt class="col-4">Class</dt>
+            <dd class="col-8">@Model.Character.ClassName</dd>
+
+            <dt class="col-4">Subclass</dt>
+            <dd class="col-8">@(Model.Character.SubclassName ?? "–")</dd>
+
+            <dt class="col-4">Level</dt>
+            <dd class="col-8">@Model.Character.Level</dd>
+
+            <dt class="col-4">Exp</dt>
+            <dd class="col-8">@Model.Character.Experience</dd>
+        </dl>
+
+        <h4>Vitals</h4>
+        <form method="post" asp-action="UpdateVitals" class="mt-2">
+            <input type="hidden" name="id" value="@Model.Character.Id" />
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label class="form-label">HP</label>
+                    <div class="input-group">
+                        <input class="form-control" type="number" name="currentHp" value="@Model.Character.CurrentHp" />
+                        <span class="input-group-text">/ @Model.Character.MaxHp</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Mana</label>
+                    <div class="input-group">
+                        <input class="form-control" type="number" name="currentMana" value="@Model.Character.CurrentMana" />
+                        <span class="input-group-text">/ @Model.Character.MaxMana</span>
+                    </div>
+                </div>
+            </div>
+
+            @if (!Model.IsDm)
+            {
+                <div class="form-text">Assigned player môže meniť iba Current HP / Mana.</div>
+            }
+
+            <button type="submit" class="btn btn-sm btn-primary mt-2">Save vitals</button>
+        </form>
+    </div>
+
+    <div class="col-lg-6 mt-4 mt-lg-0">
+        <h4>Sheet</h4>
+        <div class="row">
+            <div class="col-4"><strong>STR</strong>: @Model.Character.Str</div>
+            <div class="col-4"><strong>DEX</strong>: @Model.Character.Dex</div>
+            <div class="col-4"><strong>CON</strong>: @Model.Character.Con</div>
+            <div class="col-4 mt-2"><strong>INT</strong>: @Model.Character.Int</div>
+            <div class="col-4 mt-2"><strong>WIS</strong>: @Model.Character.Wis</div>
+            <div class="col-4 mt-2"><strong>CHA</strong>: @Model.Character.Cha</div>
+        </div>
+
+        <hr />
+
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Inventory</h5>
+            @if (Model.CanManageInventory)
+            {
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">+</button>
+            }
+        </div>
+
+        <div class="text-muted mt-1">
+            Nosnosť:
+            <strong class="@(Model.IsOverCapacity ? "text-danger" : "")">@Model.CarryCapacity</strong>
+            &nbsp;|&nbsp;
+            Váha: <strong>@Model.TotalWeight.ToString("0.##")</strong>
+        </div>
+
+        @if (Model.InventoryItems.Count == 0)
+        {
+            <div class="alert alert-light border mt-2 mb-0">Inventory je prázdny.</div>
+        }
+        else
+        {
+            <div class="table-responsive mt-2">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Predmet</th>
+                            <th>Typ</th>
+                            <th class="text-end">Ks</th>
+                            <th class="text-end">Váha</th>
+                            <th class="text-end">Spolu</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var it in Model.InventoryItems)
+                        {
+                            <tr>
+                                <td>
+                                    <div><strong>@it.Name</strong></div>
+                                    @if (!string.IsNullOrWhiteSpace(it.StatsLine))
+                                    {
+                                        <div class="small text-muted">@it.StatsLine</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(it.Description))
+                                    {
+                                        <div class="small text-muted">@it.Description</div>
+                                    }
+                                </td>
+                                <td class="text-muted">@it.Type</td>
+                                <td class="text-end">@it.Quantity</td>
+                                <td class="text-end">@it.UnitWeight.ToString("0.##")</td>
+                                <td class="text-end"><strong>@it.TotalWeight.ToString("0.##")</strong></td>
+                                <td class="text-end" style="width:1%; white-space:nowrap;">
+                                    @if (Model.CanManageInventory)
+                                    {
+                                        <form method="post" asp-action="RemoveItem" class="d-inline">
+                                            <input type="hidden" name="id" value="@Model.Character.Id" />
+                                            <input type="hidden" name="itemId" value="@it.ItemId" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Odobrať 1">−</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <h5>Notes</h5>
+        <pre class="p-3 bg-light border rounded" style="white-space: pre-wrap;">@Model.Character.Notes</pre>
+    </div>
+</div>
+
+@if (Model.IsDm)
+{
+    <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit character</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+                    <form method="post" asp-action="Edit">
+                        <input type="hidden" asp-for="EditForm.Id" />
+
+                        <div class="mb-3">
+                            <label asp-for="EditForm.Name" class="form-label"></label>
+                            <input asp-for="EditForm.Name" class="form-control" />
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="EditForm.Race" class="form-label"></label>
+                                <input asp-for="EditForm.Race" class="form-control" />
+                                <div class="form-text">MVP: editácia race je voľný text, validácia je server-side cez ruleset.</div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label asp-for="EditForm.Level" class="form-label"></label>
+                                <input asp-for="EditForm.Level" class="form-control" />
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label asp-for="EditForm.Experience" class="form-label"></label>
+                                <input asp-for="EditForm.Experience" class="form-control" />
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="EditForm.ClassName" class="form-label"></label>
+                                <input asp-for="EditForm.ClassName" class="form-control" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="EditForm.SubclassName" class="form-label"></label>
+                                <input asp-for="EditForm.SubclassName" class="form-control" />
+                                <div class="form-text">Subclass: povolený iba pri level &gt;= 6.</div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-2"><label class="form-label">STR</label><input class="form-control" asp-for="EditForm.Str" /></div>
+                            <div class="col-md-4 mb-2"><label class="form-label">DEX</label><input class="form-control" asp-for="EditForm.Dex" /></div>
+                            <div class="col-md-4 mb-2"><label class="form-label">CON</label><input class="form-control" asp-for="EditForm.Con" /></div>
+                            <div class="col-md-4 mb-2"><label class="form-label">INT</label><input class="form-control" asp-for="EditForm.Int" /></div>
+                            <div class="col-md-4 mb-2"><label class="form-label">WIS</label><input class="form-control" asp-for="EditForm.Wis" /></div>
+                            <div class="col-md-4 mb-2"><label class="form-label">CHA</label><input class="form-control" asp-for="EditForm.Cha" /></div>
+                        </div>
+
+                        <hr />
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Max HP</label>
+                                <input class="form-control" asp-for="EditForm.MaxHp" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Current HP</label>
+                                <input class="form-control" asp-for="EditForm.CurrentHp" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Max Mana</label>
+                                <input class="form-control" asp-for="EditForm.MaxMana" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Current Mana</label>
+                                <input class="form-control" asp-for="EditForm.CurrentMana" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" asp-for="EditForm.Notes" rows="3"></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.CanManageInventory)
+{
+    <div class="modal fade" id="addItemModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+                    <div class="list-group">
+                        @foreach (var it in Model.AvailableItems)
+                        {
+                            <form method="post" asp-action="AddItem" class="list-group-item list-group-item-action">
+                                <input type="hidden" name="id" value="@Model.Character.Id" />
+                                <input type="hidden" name="itemId" value="@it.ItemId" />
+
+                                <button type="submit" class="btn btn-link p-0 text-decoration-none" style="text-align:left; width:100%;">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <div><strong>@it.Name</strong> <span class="text-muted">(@it.Type)</span></div>
+                                            @if (!string.IsNullOrWhiteSpace(it.StatsLine))
+                                            {
+                                                <div class="small text-muted">@it.StatsLine</div>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(it.Description))
+                                            {
+                                                <div class="small text-muted">@it.Description</div>
+                                            }
+                                        </div>
+                                        <div class="text-end text-muted" style="min-width:140px;">
+                                            <div>Váha: <strong>@it.Weight.ToString("0.##")</strong></div>
+                                            <div>Cena: <strong>@it.Price</strong></div>
+                                        </div>
+                                    </div>
+                                </button>
+                            </form>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

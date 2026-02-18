@@ -1,0 +1,23 @@
+html, body {
+  height: 100%;
+}
+
+body {
+  margin-bottom: 0;
+}
+
+.footer {
+  background-color: #f8f9fa;
+  padding: 16px 0;
+}
+
+.box-shadow {
+  box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .05);
+}
+
+/* Assigned list – keď je dlhý, nech sa dá scrollovať doprava */
+.assigned-scroll {
+  overflow-x: auto;
+  white-space: nowrap;
+  max-width: 100%;
+}

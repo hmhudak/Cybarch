@@ -1,0 +1,116 @@
+@model UniverseDetailsVm
+@{
+    ViewData["Title"] = "Universe";
+}
+
+<div class="d-flex justify-content-between align-items-center">
+    <div>
+        <h2>@Model.Universe.Name</h2>
+        <div class="text-muted">
+            Ruleset: <strong>@Model.RulesetDisplayName</strong> (<code>@Model.Universe.RulesetKey</code>)
+            &nbsp;|&nbsp;
+            Universe ID: <code>@Model.Universe.Id</code>
+            &nbsp;|&nbsp;
+            Join password: <code>@Model.Universe.JoinPassword</code>
+        </div>
+    </div>
+    <div>
+        <a class="btn btn-outline-secondary" asp-action="Index">Back</a>
+        @if (Model.MemberRole == UniverseMemberRole.Creator)
+        {
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createGameModal">Create game</button>
+        }
+    </div>
+</div>
+
+<hr />
+
+<div class="row">
+    <div class="col-lg-7">
+        <h4>Games</h4>
+
+        @if (!Model.Games.Any())
+        {
+            <div class="alert alert-secondary">V tomto Universee zatiaľ nie sú žiadne hry.</div>
+        }
+        else
+        {
+            <ul class="list-group">
+                @foreach (var item in Model.Games)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold">
+                                @item.Game.Name
+                                @if (item.MyRole is not null)
+                                {
+                                    <span class="badge bg-secondary ms-2">@item.MyRole</span>
+                                }
+                            </div>
+                            <div class="text-muted small">Created: @item.Game.CreatedAtUtc.ToString("yyyy-MM-dd")</div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="Games" asp-action="Details" asp-route-id="@item.Game.Id">Open</a>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="col-lg-5 mt-4 mt-lg-0">
+        <h4>Members</h4>
+
+        <ul class="list-group">
+            @foreach (var m in Model.Members)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>@m.DisplayName</span>
+                    <span class="badge @(m.Role == UniverseMemberRole.Creator ? "bg-primary" : "bg-secondary")">@m.Role</span>
+                </li>
+            }
+        </ul>
+    </div>
+</div>
+
+@if (Model.MemberRole == UniverseMemberRole.Creator)
+{
+    <div class="modal fade" id="createGameModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create game</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="post" asp-action="CreateGame">
+                        <input type="hidden" asp-for="CreateGame.UniverseId" />
+
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="CreateGame.Name" class="form-label"></label>
+                            <input asp-for="CreateGame.Name" class="form-control" />
+                            <span asp-validation-for="CreateGame.Name" class="text-danger"></span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Create</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        @if (Model.ShowCreateGameModal)
+        {
+            <text>
+            var m = new bootstrap.Modal(document.getElementById('createGameModal'));
+            m.show();
+            </text>
+        }
+    </script>
+}

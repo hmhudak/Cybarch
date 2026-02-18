@@ -1,0 +1,446 @@
+@model GameDetailsVm
+@{
+    ViewData["Title"] = "Game";
+}
+
+<div class="d-flex justify-content-between align-items-center">
+    <div>
+        <h2>@Model.Game.Name</h2>
+        <div class="text-muted">
+            Universe: <a asp-controller="Universes" asp-action="Details" asp-route-id="@Model.Universe.Id">@Model.Universe.Name</a>
+            &nbsp;|&nbsp;
+            Ruleset: <strong>@Model.RulesetDisplayName</strong> (<code>@Model.Game.RulesetKey</code>)
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-controller="Universes" asp-action="Details" asp-route-id="@Model.Universe.Id">Back to Universe</a>
+
+        @* God mode (Universe creator) *@
+        @if (Model.IsUniverseCreator)
+        {
+            <form method="post" asp-action="ToggleGodMode" class="m-0">
+                <input type="hidden" name="id" value="@Model.Game.Id" />
+                <button class="btn btn-outline-warning" type="submit" title="God mode: extra právo degradovať iných DM">
+                    God mode @(Model.IsGodMode ? "ON" : "OFF")
+                </button>
+            </form>
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.TempError))
+{
+    <div class="alert alert-danger mt-3">@Model.TempError</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.NonGameMemberMessage))
+{
+    <div class="alert alert-warning mt-3">@Model.NonGameMemberMessage</div>
+
+    @if (Model.IsUniverseCreator)
+    {
+        <div class="text-muted">Ako Universe creator vieš použiť God mode a pripojiť sa ako DM.</div>
+    }
+}
+else
+{
+<div class="row mt-4">
+    <div class="col-lg-7">
+        <h4>Campaign</h4>
+
+        @if (Model.IsDm)
+        {
+            <form method="post" asp-action="UpdateCampaign" class="mt-2">
+                <input type="hidden" name="id" value="@Model.Game.Id" />
+                <div class="mb-2">
+                    <textarea class="form-control" name="campaignText" rows="10">@Model.CampaignEditText</textarea>
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+            </form>
+            <div class="form-text">Len DM môže upravovať CampaignText.</div>
+        }
+        else
+        {
+            <pre class="p-3 bg-light border rounded" style="white-space: pre-wrap;">@Model.Game.CampaignText</pre>
+            <div class="form-text">Player môže iba čítať.</div>
+        }
+
+        <hr class="my-4" />
+
+        <div class="d-flex justify-content-between align-items-center">
+            <h4>Characters</h4>
+            @if (Model.IsDm)
+            {
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createCharacterModal">
+                    Create character
+                </button>
+            }
+        </div>
+
+        @if (!Model.Characters.Any())
+        {
+            <div class="alert alert-secondary mt-3">V tejto hre zatiaľ nie sú žiadne postavy.</div>
+        }
+        else
+        {
+            <div class="list-group mt-3">
+                @foreach (var c in Model.Characters)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="fw-bold">
+                                    @c.Name <span class="text-muted">(Lv @c.Level)</span>
+                                </div>
+                                <div class="text-muted">@c.ClassDisplay / @c.SubclassDisplay</div>
+
+                                <div class="small mt-1 d-flex align-items-center gap-2">
+                                    <span class="fw-semibold">Assigned:</span>
+
+                                    <div class="assigned-scroll flex-grow-1">
+                                        @if (!c.AssignedPlayers.Any())
+                                        {
+                                            <span class="text-muted">–</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@string.Join(", ", c.AssignedPlayers.Select(p => p.DisplayName))</span>
+                                        }
+                                    </div>
+
+                                    @if (Model.IsDm)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                title="Assign players"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#assignModal_@(c.CharacterId)">+
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+
+                            <div>
+                                @if (c.CanOpenDetails)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary" asp-controller="Characters" asp-action="Details" asp-route-id="@c.CharacterId">Open</a>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary" disabled title="Nemáš prístup">Open</button>
+                                }
+                            </div>
+                        </div>
+
+                        @* Assign modal (DM-only) *@
+                        @if (Model.IsDm)
+                        {
+                            <div class="modal fade" id="assignModal_@(c.CharacterId)" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <form method="post" asp-action="UpdateAssignments">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Assign players – @c.Name</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+
+                                            <div class="modal-body" style="max-height:60vh; overflow-y:auto;">
+                                                <input type="hidden" name="gameId" value="@Model.Game.Id" />
+                                                <input type="hidden" name="characterId" value="@c.CharacterId" />
+
+                                                @if (!Model.Players.Any())
+                                                {
+                                                    <div class="alert alert-secondary">V hre zatiaľ nie sú žiadni Players.</div>
+                                                }
+                                                else
+                                                {
+                                                    @foreach (var p in Model.Players)
+                                                    {
+                                                        var isChecked = c.AssignedUserIds.Contains(p.UserId);
+                                                        var checkId = $"chk_{c.CharacterId}_{p.UserId}";
+                                                        <div class="form-check">
+                                                            <input class="form-check-input"
+                                                                   type="checkbox"
+                                                                   name="selectedPlayerIds"
+                                                                   value="@p.UserId"
+                                                                   id="@checkId"
+                                                                   @(isChecked ? "checked" : "") />
+                                                            <label class="form-check-label" for="@checkId">@p.DisplayName</label>
+                                                        </div>
+                                                    }
+                                                }
+                                            </div>
+
+                                            <div class="modal-footer">
+                                                <button type="submit" class="btn btn-primary">Save</button>
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="col-lg-5">
+        <h4>Members</h4>
+
+        <div class="mt-2">
+            <div class="fw-semibold">DMs</div>
+            <ul class="list-group">
+                @foreach (var dm in Model.Dms)
+                {
+                    var isMe = dm.UserId == Model.CurrentUserId;
+                    var lastDm = Model.DmCount <= 1;
+
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>@dm.DisplayName</span>
+
+                        <div class="d-flex gap-2">
+                            @* DM riadok: default nič *@
+
+                            @* IBA ak som ten DM ja: Degrade to player (ale nie ak som posledný DM) *@
+                            @if (Model.IsDm && isMe)
+                            {
+                                <form method="post" asp-action="DegradeToPlayer" class="m-0">
+                                    <input type="hidden" name="id" value="@Model.Game.Id" />
+                                    <input type="hidden" name="userIdToDegrade" value="@dm.UserId" />
+                                    <button class="btn btn-sm btn-outline-danger" type="submit" @(lastDm ? "disabled" : "")>
+                                        Degrade to player
+                                    </button>
+                                </form>
+                            }
+
+                            @* God mode: Creator môže degradovať aj iných DM (ale stále nie posledného DM) *@
+                            @if (Model.IsDm && Model.IsGodMode && !isMe)
+                            {
+                                <form method="post" asp-action="DegradeToPlayer" class="m-0">
+                                    <input type="hidden" name="id" value="@Model.Game.Id" />
+                                    <input type="hidden" name="userIdToDegrade" value="@dm.UserId" />
+                                    <button class="btn btn-sm btn-outline-danger" type="submit" @(lastDm ? "disabled" : "")>
+                                        Degrade
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+
+            <div class="fw-semibold mt-3">Players</div>
+            <ul class="list-group">
+                @if (!Model.Players.Any())
+                {
+                    <li class="list-group-item text-muted">–</li>
+                }
+                else
+                {
+                    @foreach (var pl in Model.Players)
+                    {
+                        var isMe = pl.UserId == Model.CurrentUserId;
+
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>@pl.DisplayName</span>
+
+                            <div class="d-flex gap-2">
+                                @* Keď som Player ja: Leave game *@
+                                @if (isMe)
+                                {
+                                    <form method="post" asp-action="LeaveGame" class="m-0">
+                                        <input type="hidden" name="id" value="@Model.Game.Id" />
+                                        <button class="btn btn-sm btn-outline-danger" type="submit">Leave game</button>
+                                    </form>
+                                }
+
+                                @* DM akcie nad Players *@
+                                @if (Model.IsDm)
+                                {
+                                    <form method="post" asp-action="MakeDm" class="m-0">
+                                        <input type="hidden" name="id" value="@Model.Game.Id" />
+                                        <input type="hidden" name="userIdToPromote" value="@pl.UserId" />
+                                        <button class="btn btn-sm btn-outline-primary" type="submit">Make DM</button>
+                                    </form>
+
+                                    <form method="post" asp-action="RemoveFromGame" class="m-0">
+                                        <input type="hidden" name="id" value="@Model.Game.Id" />
+                                        <input type="hidden" name="userIdToRemove" value="@pl.UserId" />
+                                        <button class="btn btn-sm btn-outline-secondary" type="submit">Remove</button>
+                                    </form>
+                                }
+                            </div>
+                        </li>
+                    }
+                }
+            </ul>
+
+            <div class="fw-semibold mt-3">Not players</div>
+            <div class="text-muted small">Universe members, ktorí ešte nie sú v hre.</div>
+
+            <ul class="list-group mt-2">
+                @if (!Model.NotPlayers.Any())
+                {
+                    <li class="list-group-item text-muted">–</li>
+                }
+                else
+                {
+                    @foreach (var np in Model.NotPlayers)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>@np.DisplayName</span>
+                            @if (Model.IsDm)
+                            {
+                                <form method="post" asp-action="MakePlayer" class="m-0">
+                                    <input type="hidden" name="id" value="@Model.Game.Id" />
+                                    <input type="hidden" name="userIdToAdd" value="@np.UserId" />
+                                    <button class="btn btn-sm btn-success" type="submit">Make player</button>
+                                </form>
+                            }
+                        </li>
+                    }
+                }
+            </ul>
+        </div>
+    </div>
+</div>
+
+@* ------------------------------------------------------------
+   Create Character Modal (DM-only)
+   ------------------------------------------------------------ *@
+@if (Model.IsDm)
+{
+    <div class="modal fade" id="createCharacterModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create character</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <div class="alert alert-secondary">
+                        <div class="fw-semibold">Pravidlá (MVP)</div>
+                        <ul class="mb-0">
+                            <li>Race + Class sú povinné (výber z katalógu rulesetu).</li>
+                            <li>Subclass je povolený iba pri Level &gt;= 6.</li>
+                            <li>Subclass musí patriť pod zvolenú Class.</li>
+                        </ul>
+                    </div>
+
+                    <form method="post" asp-action="CreateCharacter">
+                        <input type="hidden" asp-for="CreateCharacter.GameId" />
+
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="CreateCharacter.Name" class="form-label"></label>
+                            <input asp-for="CreateCharacter.Name" class="form-control" />
+                            <span asp-validation-for="CreateCharacter.Name" class="text-danger"></span>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="CreateCharacter.Race" class="form-label"></label>
+                                <select asp-for="CreateCharacter.Race" class="form-select" id="create_race">
+                                    <option value="">— vyber —</option>
+                                    @foreach (var opt in Model.CreateCharacter.RaceOptions)
+                                    {
+                                        <option value="@opt.Key" selected="@(opt.Key == Model.CreateCharacter.Race)">@opt.Name</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="CreateCharacter.Race" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label asp-for="CreateCharacter.Level" class="form-label"></label>
+                                <input asp-for="CreateCharacter.Level" class="form-control" id="create_level" />
+                                <span asp-validation-for="CreateCharacter.Level" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="CreateCharacter.ClassName" class="form-label"></label>
+                                <select asp-for="CreateCharacter.ClassName" class="form-select" id="create_class">
+                                    <option value="">— vyber —</option>
+                                    @foreach (var opt in Model.CreateCharacter.ClassOptions)
+                                    {
+                                        <option value="@opt.Key" selected="@(opt.Key == Model.CreateCharacter.ClassName)">@opt.Name</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="CreateCharacter.ClassName" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="CreateCharacter.SubclassName" class="form-label"></label>
+                                <select asp-for="CreateCharacter.SubclassName" class="form-select" id="create_subclass">
+                                    <option value="">— none —</option>
+                                    @foreach (var s in Model.CreateCharacter.SubclassOptions)
+                                    {
+                                        <option value="@s.Key" data-class="@s.ClassKey" selected="@(s.Key == Model.CreateCharacter.SubclassName)">@s.Name</option>
+                                    }
+                                </select>
+                                <div class="form-text">Subclass sa odomkne až pri level 6.</div>
+                                <span asp-validation-for="CreateCharacter.SubclassName" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Create</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+}
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        // ------------------------------------------------------------
+        // JS: CreateCharacter modal
+        // - filter subclass options podľa class
+        // - disable subclass pri level < 6
+        // ------------------------------------------------------------
+        function refreshCreateSubclass() {
+            var cls = document.getElementById('create_class')?.value;
+            var lvl = parseInt(document.getElementById('create_level')?.value || '1');
+            var subclass = document.getElementById('create_subclass');
+            if (!subclass) return;
+
+            var enabled = lvl >= 6;
+            subclass.disabled = !enabled;
+            if (!enabled) {
+                subclass.value = '';
+            }
+
+            for (var i = 0; i < subclass.options.length; i++) {
+                var opt = subclass.options[i];
+                var optClass = opt.getAttribute('data-class');
+                if (!optClass) {
+                    opt.hidden = false;
+                    continue;
+                }
+                opt.hidden = (cls && optClass !== cls);
+            }
+        }
+
+        document.getElementById('create_class')?.addEventListener('change', refreshCreateSubclass);
+        document.getElementById('create_level')?.addEventListener('input', refreshCreateSubclass);
+
+        refreshCreateSubclass();
+
+        @if (Model.ShowCreateCharacterModal)
+        {
+            <text>
+            var m = new bootstrap.Modal(document.getElementById('createCharacterModal'));
+            m.show();
+            </text>
+        }
+    </script>
+}
