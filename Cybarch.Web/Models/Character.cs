@@ -29,7 +29,6 @@ public class Character
     public int Dex { get; set; }
     public int Con { get; set; }
     public int Int { get; set; }
-    public int Wis { get; set; }
     public int Cha { get; set; }
 
     public string Notes { get; set; } = string.Empty;

@@ -26,6 +26,11 @@ public class CharacterCreateVm
     public List<CatalogItem> RaceOptions { get; set; } = new();
     public List<CatalogItem> ClassOptions { get; set; } = new();
     public List<SubclassItem> SubclassOptions { get; set; } = new();
+    public int Str { get; set; }
+    public int Int { get; set; }
+    public int End { get; set; }
+    public int Dex { get; set; }
+    public int Char { get; set; }
 }
 
 public class CharacterEditVm
@@ -52,7 +57,6 @@ public class CharacterEditVm
     public int Dex { get; set; }
     public int Con { get; set; }
     public int Int { get; set; }
-    public int Wis { get; set; }
     public int Cha { get; set; }
 
     public string Notes { get; set; } = string.Empty;

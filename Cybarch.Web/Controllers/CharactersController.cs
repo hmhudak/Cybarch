@@ -170,7 +170,6 @@ public class CharactersController : Controller
             Dex = character.Dex,
             Con = character.Con,
             Int = character.Int,
-            Wis = character.Wis,
             Cha = character.Cha,
 
             Notes = character.Notes,
@@ -300,7 +299,6 @@ public class CharactersController : Controller
         character.Dex = form.Dex;
         character.Con = form.Con;
         character.Int = form.Int;
-        character.Wis = form.Wis;
         character.Cha = form.Cha;
 
         character.Notes = form.Notes ?? string.Empty;

@@ -6,10 +6,10 @@ public static class Drd16CatalogClasses
 {
     public static readonly IReadOnlyList<CatalogItem> All = new List<CatalogItem>
     {
-        new("warrior", "Warrior"),
-        new("ranger", "Ranger"),
-        new("mage", "Mage"),
-        new("cleric", "Cleric"),
-        new("thief", "Thief"),
+        new("valecnik",   "Válečník"),
+        new("hranicar",   "Hraničář"),
+        new("alchymista", "Alchymista"),
+        new("kouzelnik",  "Kouzelník"),
+        new("zlodej",     "Zloděj"),
     };
 }

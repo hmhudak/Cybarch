@@ -132,12 +132,11 @@ public class GamesController : Controller
             SubclassName = string.IsNullOrWhiteSpace(form.SubclassName) ? null : form.SubclassName,
 
             // MVP default attributes
-            Str = 10,
-            Dex = 10,
-            Con = 10,
-            Int = 10,
-            Wis = 10,
-            Cha = 10,
+            Str = form.Str,
+            Dex = form.Dex,
+            Con = form.End,
+            Int = form.Int,
+            Cha = form.Char,
 
             Notes = string.Empty,
 

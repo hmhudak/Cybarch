@@ -6,19 +6,19 @@ public static class Drd16CatalogSubclasses
 {
     public static readonly IReadOnlyList<SubclassItem> All = new List<SubclassItem>
     {
-        new("berserker", "Berserker", "warrior"),
-        new("paladin", "Paladin", "warrior"),
+        new("bojovnik", "Bojovník", "valecnik"),
+        new("sermir", "Šermíř", "valecnik"),
 
-        new("sniper", "Sniper", "ranger"),
-        new("beastmaster", "Beastmaster", "ranger"),
+        new("druid", "Druid", "hranicar"),
+        new("chodec", "Chodec", "hranicar"),
 
-        new("elementalist", "Elementalist", "mage"),
-        new("necromancer", "Necromancer", "mage"),
+        new("theurg", "Theurg", "alchymista"),
+        new("pyrofor", "Pyrofor", "mage"),
 
-        new("healer", "Healer", "cleric"),
-        new("inquisitor", "Inquisitor", "cleric"),
+        new("mag", "Mág", "kouzelnik"),
+        new("carodej", "Čaroděj", "kouzelnik"),
 
-        new("assassin", "Assassin", "thief"),
-        new("shadow", "Shadow", "thief"),
+        new("lupic", "Lupič", "zlodej"),
+        new("sicco", "Sicco", "zlodej"),
     };
 }

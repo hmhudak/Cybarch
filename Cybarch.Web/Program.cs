@@ -167,7 +167,7 @@ static async Task SeedDevDataAsync(WebApplication app)
             CurrentHp = 30,
             MaxMana = 10,
             CurrentMana = 10,
-            Str = 12, Dex = 10, Con = 12, Int = 9, Wis = 10, Cha = 10,
+            Str = 12, Dex = 10, Con = 12, Int = 9, Cha = 10,
             Notes = "Demo character"
         };
 

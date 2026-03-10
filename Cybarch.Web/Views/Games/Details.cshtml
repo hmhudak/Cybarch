@@ -386,7 +386,58 @@ else
                                 <span asp-validation-for="CreateCharacter.SubclassName" class="text-danger"></span>
                             </div>
                         </div>
+                            <div id="attribute_section" style="display:none" class="mt-3">
+                                <hr />
+                                <h6>Atribúty — zadaj hodnotu hodu kockou</h6>
+                                <div class="row">
 
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Sila <small class="text-muted">(<span id="strength_min">?</span>–<span id="strength_max">?</span>)</small></label>
+                                        <div class="form-text mb-1" id="strength_hint"></div>
+                                        <input type="number" id="strength_input" class="form-control" />
+                                        <div class="invalid-feedback">Zadaj platný hod kockou.</div>
+                                        <div class="mt-1">Výsledok: <strong id="strength_final">–</strong></div>
+                                        <input type="hidden" id="strength_hidden" name="CreateCharacter.Str" value="0" />
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Inteligencia <small class="text-muted">(<span id="intelligence_min">?</span>–<span id="intelligence_max">?</span>)</small></label>
+                                        <div class="form-text mb-1" id="intelligence_hint"></div>
+                                        <input type="number" id="intelligence_input" class="form-control" />
+                                        <div class="invalid-feedback">Zadaj platný hod kockou.</div>
+                                        <div class="mt-1">Výsledok: <strong id="intelligence_final">–</strong></div>
+                                        <input type="hidden" id="intelligence_hidden" name="CreateCharacter.Int" value="0" />
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Výdrž <small class="text-muted">(<span id="endurance_min">?</span>–<span id="endurance_max">?</span>)</small></label>
+                                        <div class="form-text mb-1" id="endurance_hint"></div>
+                                        <input type="number" id="endurance_input" class="form-control" />
+                                        <div class="invalid-feedback">Zadaj platný hod kockou.</div>
+                                        <div class="mt-1">Výsledok: <strong id="endurance_final">–</strong></div>
+                                        <input type="hidden" id="endurance_hidden" name="CreateCharacter.End" value="0" />
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Obratnosť <small class="text-muted">(<span id="dexterity_min">?</span>–<span id="dexterity_max">?</span>)</small></label>
+                                        <div class="form-text mb-1" id="dexterity_hint"></div>
+                                        <input type="number" id="dexterity_input" class="form-control" />
+                                        <div class="invalid-feedback">Zadaj platný hod kockou.</div>
+                                        <div class="mt-1">Výsledok: <strong id="dexterity_final">–</strong></div>
+                                        <input type="hidden" id="dexterity_hidden" name="CreateCharacter.Dex" value="0" />
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Charisma <small class="text-muted">(<span id="charisma_min">?</span>–<span id="charisma_max">?</span>)</small></label>
+                                        <div class="form-text mb-1" id="charisma_hint"></div>
+                                        <input type="number" id="charisma_input" class="form-control" />
+                                        <div class="invalid-feedback">Zadaj platný hod kockou.</div>
+                                        <div class="mt-1">Výsledok: <strong id="charisma_final">–</strong></div>
+                                        <input type="hidden" id="charisma_hidden" name="CreateCharacter.Char" value="0" />
+                                    </div>
+
+                                </div>
+                            </div>
                         <button type="submit" class="btn btn-primary">Create</button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     </form>
@@ -433,6 +484,9 @@ else
         document.getElementById('create_class')?.addEventListener('change', refreshCreateSubclass);
         document.getElementById('create_level')?.addEventListener('input', refreshCreateSubclass);
 
+        document.getElementById('create_race')?.addEventListener('change', showAttributeRanges);
+        document.getElementById('create_class')?.addEventListener('change', showAttributeRanges);
+
         refreshCreateSubclass();
 
         @if (Model.ShowCreateCharacterModal)
@@ -441,6 +495,105 @@ else
             var m = new bootstrap.Modal(document.getElementById('createCharacterModal'));
             m.show();
             </text>
+        }
+
+        const attributeRanges = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            Cybarch.Web.Services.Rulesets.Drd16.AttributeRanges.Data.
+            ToDictionary(
+                kvp => kvp.Key.Race + "|" + kvp.Key.Profession,
+                kvp => kvp.Value
+            )
+            ));
+        function showAttributeRanges() {
+
+            const race = document.getElementById('create_race')?.value;
+            const profession = document.getElementById('create_class')?.value;
+            const section = document.getElementById('attribute_section');
+
+            if (!race | !profession){
+                    section.style.display = 'none';
+                        return;
+            }
+            const range = attributeRanges[race + "|" + profession];
+
+            if (!range) {section.style.display = 'none'; return;}
+
+                section.style.display = 'block';
+            setAttr('strength',     range.StrengthMin,     range.StrengthMax);
+            setAttr('intelligence', range.IntelligenceMin, range.IntelligenceMax);
+            setAttr('endurance',    range.EnduranceMin,    range.EnduranceMax);
+            setAttr('dexterity',    range.DexterityMin,    range.DexterityMax);
+            setAttr('charisma',     range.CharismaMin,     range.CharismaMax);
+            attachDiceListeners();
+            }
+
+        function setAttr(attr, min, max) {
+            document.getElementById(attr + '_min').textContent = min;
+            document.getElementById(attr + '_max').textContent = max;
+
+            const attrRange = max - min;
+            let dieMin, dieMax;
+            if (attrRange === 5)       { dieMin = 1; dieMax = 6; }
+            else if (attrRange === 10) { dieMin = 2; dieMax = 12; }
+            else                       { dieMin = 3; dieMax = 18; }
+
+            document.getElementById(attr + '_input').min = dieMin;
+            document.getElementById(attr + '_input').max = dieMax;
+            document.getElementById(attr + '_input').placeholder = dieMin + ' - ' + dieMax;
+            }
+        function onDiceInput(attrName){
+            const input = document.getElementById(attrName + '_input');
+            const min = parseInt(document.getElementById(attrName + '_min').textContent);
+            const max = parseInt(document.getElementById(attrName + '_max').textContent);
+
+            const roll = parseInt(input.value);
+            if (isNaN(roll)){
+                input.classList.remove('is-invalid');
+                return;
+            }
+            if (roll < parseInt(input.min) || roll > parseInt(input.max)) {
+                input.classList.add('is-invalid');
+                document.getElementById(attrName + '_final').textContent = '–';
+                document.getElementById(attrName + '_hidden').value = '0';
+                return;
+            }
+            input.classList.remove('is-invalid');
+            const range = max - min;
+            let finalValue;
+            if (range === 5 ){
+                finalValue = roll + min - 1;
+            }
+            else if(range === 10){
+                finalValue = roll + min - 2;
+            }
+            else{
+                finalValue = roll + min - 3;
+            }
+            document.getElementById(attrName + '_final').textContent = finalValue;
+            document.getElementById(attrName + '_hidden').value = finalValue;
+        }
+        function attachDiceListeners() {
+            const attrs = ['strength', 'intelligence', 'endurance', 'dexterity', 'charisma'];
+
+            attrs.forEach(attr => {
+                // Event listener na input
+                const input = document.getElementById(attr + '_input');
+                input.addEventListener('input', function() {
+                    onDiceInput(attr);
+                });
+
+                // Prečítaj range a zobraz správu koľko krát hádzať
+                const min = parseInt(document.getElementById(attr + '_min').textContent);
+                const max = parseInt(document.getElementById(attr + '_max').textContent);
+                const range = max - min;
+
+                let diceCount;
+                if (range === 5)       diceCount = '1 krát';
+                else if (range === 10) diceCount = '2 krát';
+                else if (range === 15) diceCount = '3 krát';
+
+                document.getElementById(attr + '_hint').textContent = 'Hoď kockou ' + diceCount;
+            });
         }
     </script>
 }
